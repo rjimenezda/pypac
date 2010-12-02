@@ -64,6 +64,9 @@ class Ghost(pygame.sprite.Sprite):
         
         self.temp_counter = 0
         
+    def lolaso_padre(self):
+        print 'YIEJAJAJAJ'
+        
     def load_imgs(self):
         """ Creamos un vector con las imágenes del sprite """
         self._normal = list()
@@ -332,6 +335,10 @@ class Pacman(pygame.sprite.Sprite):
             self.orient = 3
             self.estado = 0
             self.next_move = (0, -self.speed)
+            
+    def matar(self):
+        """ Nos matan :sadface: """
+        print 'NOoooooooooooooooooooooooo'
 
 class Juego():
     """ Esta clase inicia todas las cosas de pygame """
@@ -355,8 +362,8 @@ class Juego():
         self.blinky = Blinky(300, 300)
         self.pinky = Pinky(100, 100)
         # Creamos un grupo de sprites
-        self.g_ghosts = pygame.sprite.RenderPlain((self.blinky, self.pinky))
-        self.g_pacman = pygame.sprite.RenderPlain((self.pacman))
+        self.g_ghosts = pygame.sprite.Group((self.blinky, self.pinky))
+        self.g_pacman = pygame.sprite.GroupSingle((self.pacman))
         # Creamos un reloj de juego
         self.reloj = pygame.time.Clock()
         
@@ -367,7 +374,7 @@ class Juego():
         while not self.terminado:
             self.reloj.tick(30)
             self.eventos()
-            #self.logica()
+            self.logica()
             self.dibujado()
         
     def dibujado(self):
@@ -379,10 +386,8 @@ class Juego():
             self.__dib_menu()
         elif self.dondeestoy == 'juego':
             #self.__dib_juego()
+            # Dibujado 
             self.pantalla.blit(self.sur_negro, (0, 0))
-            self.g_ghosts.update()
-            self.g_pacman.update()
-            pygame.sprite.groupcollide(self.g_ghosts, self.g_pacman, False, False)
             self.g_ghosts.draw(self.pantalla)
             self.g_pacman.draw(self.pantalla)
             pygame.display.update()
@@ -391,6 +396,25 @@ class Juego():
         
         pygame.display.flip()
     
+    def logica(self):
+        """ Aquí se controlan colisiones, estados del juego etc..."""
+        
+        if self.dondeestoy == 'juego':
+            # Actualizamos
+            self.g_ghosts.update()
+            self.g_pacman.update()
+            fant_col = pygame.sprite.spritecollide(   self.pacman, 
+                                                        self.g_ghosts, 
+                                                        False, 
+                                                        pygame.sprite.collide_circle_ratio(0.7))
+            
+            for fantasma in fant_col:
+                if fantasma.estado == 'huyendo':
+                    fantasma.comer()
+                
+                if fantasma.estado == 'buscando' or fantasma.estado == 'persiguiendo':
+                    self.pacman.matar()
+
     def eventos(self):
         """ Aquí controlamos los eventos que nos lleguen """
         
