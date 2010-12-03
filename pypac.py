@@ -15,6 +15,82 @@ def cargar_imagen(archivo, transparencia = False):
         imagen.set_colorkey(color, pygame.RLEACCEL)
     return imagen
     
+class Pellet(pygame.sprite.Sprite):
+    """ Clase que maneja un Pellet normal """
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = cargar_imagen('img/tiles/7.png', True)
+        
+        self.rect = self.image.get_rect()
+        self.rect = pygame.rect.Rect((x, y) , self.rect.bottomright)
+        
+class PowerPellet(pygame.sprite.Sprite):
+    """ Clase que maneja un pellet de los grandes """
+    def __init__(self, x, y):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = cargar_imagen('img/tiles/6.png', True)
+        
+        self.rect = self.image.get_rect()
+        self.rect = pygame.rect.Rect((x,y), self.rect.bottomright)
+
+class Borde(pygame.sprite.Sprite):
+    """ Clase que implementa uno de los bordes del tablero """
+    def __init__(self, x, y, tipo):
+        pygame.sprite.Sprite.__init__(self)
+        
+        print tipo
+        
+        if tipo == 0:
+            self.image = cargar_imagen('img/tiles/0.png', True)
+        elif tipo == 1:
+            self.image = cargar_imagen('img/tiles/1.png', True)
+        elif tipo == 2:
+            self.image = cargar_imagen('img/tiles/2.png', True)
+        elif tipo == 3:
+            self.image = cargar_imagen('img/tiles/3.png', True)
+        elif tipo == 4:
+            self.image = cargar_imagen('img/tiles/4.png', True)
+        elif tipo == 5:
+            self.image = cargar_imagen('img/tiles/5.png', True)
+        
+        self.rect = self.image.get_rect()
+        self.rect = pygame.rect.Rect((x,y), self.rect.bottomright)
+
+class Mapa():
+    """ Esta clase lee un nivel de mapa y genera una matriz de bloques """
+    def __init__(self, archivo = 'maps/map0.txt'):
+        """ """
+        map_file = open(archivo, 'r')
+        lineas = map_file.readlines()
+        self.mapa = list()
+        self.bordes = list()
+        self.pellets = list()
+        
+        # Horrible manera de hacer esto, pueden meternos cacota en el mapa
+        for linea in lineas:
+            self.mapa.append(list(eval(linea.strip().replace(' ', ','))))
+
+        
+        coor = [0, 0]
+        
+        # Recorremos la matriz y creamos una lista con objetos del juego
+        for linea in self.mapa:
+            for num in linea:
+                if num >= 0 and num <= 5:
+                    print 'Creando un borde tipo',num
+                    self.bordes.append(Borde(coor[0], coor[1], num))
+                elif num == 6:
+                    self.pellets.append(PowerPellet(coor[0], coor[1]))
+                elif num == 7:
+                    self.pellets.append(Pellet(coor[0], coor[1]))
+                coor[0] += 20
+            coor[1] += 20
+            coor[0] = 0
+            
+    def get_sprites(self):
+        """ Devuelve las tuplas con los bordes y las pellets """
+        return tuple(self.bordes), tuple(self.pellets)
+
 class Ghost(pygame.sprite.Sprite):
     """ Clase que maneja un fantasma cualquiera """
     def __init__(self, x = 0, y = 0):
@@ -63,10 +139,7 @@ class Ghost(pygame.sprite.Sprite):
         self.movimientos = [[4, 30], [1, 30], [3, 30], [2, 30]]
         
         self.temp_counter = 0
-        
-    def lolaso_padre(self):
-        print 'YIEJAJAJAJ'
-        
+
     def load_imgs(self):
         """ Creamos un vector con las imágenes del sprite """
         self._normal = list()
@@ -361,9 +434,16 @@ class Juego():
         self.pacman = Pacman(400, 300)
         self.blinky = Blinky(300, 300)
         self.pinky = Pinky(100, 100)
-        # Creamos un grupo de sprites
+        
+        # Creamos un mapa
+        mi_mapa = Mapa()
+        self.bordes, self.pellets = mi_mapa.get_sprites()
+        
+        # Creamos grupos de sprites
         self.g_ghosts = pygame.sprite.Group((self.blinky, self.pinky))
+        self.g_pellets = pygame.sprite.Group(self.pellets)
         self.g_pacman = pygame.sprite.GroupSingle((self.pacman))
+        self.g_bordes = pygame.sprite.Group(self.bordes)
         # Creamos un reloj de juego
         self.reloj = pygame.time.Clock()
         
@@ -388,6 +468,8 @@ class Juego():
             #self.__dib_juego()
             # Dibujado 
             self.pantalla.blit(self.sur_negro, (0, 0))
+            self.g_bordes.draw(self.pantalla)
+            self.g_pellets.draw(self.pantalla)
             self.g_ghosts.draw(self.pantalla)
             self.g_pacman.draw(self.pantalla)
             pygame.display.update()
