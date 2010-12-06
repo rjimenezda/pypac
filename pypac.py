@@ -38,8 +38,6 @@ class Borde(pygame.sprite.Sprite):
     def __init__(self, x, y, tipo):
         pygame.sprite.Sprite.__init__(self)
         
-        print tipo
-        
         if tipo == 0:
             self.image = cargar_imagen('img/tiles/0.png', True)
         elif tipo == 1:
@@ -65,11 +63,14 @@ class Mapa():
         self.mapa = list()
         self.bordes = list()
         self.pellets = list()
+        self.pow_pellets = list()
         
         # Horrible manera de hacer esto, pueden meternos cacota en el mapa
         for linea in lineas:
             self.mapa.append(list(eval(linea.strip().replace(' ', ','))))
 
+        print len(self.mapa)
+        print len(self.mapa[0])
         
         coor = [0, 0]
         
@@ -77,10 +78,9 @@ class Mapa():
         for linea in self.mapa:
             for num in linea:
                 if num >= 0 and num <= 5:
-                    print 'Creando un borde tipo',num
                     self.bordes.append(Borde(coor[0], coor[1], num))
                 elif num == 6:
-                    self.pellets.append(PowerPellet(coor[0], coor[1]))
+                    self.pow_pellets.append(PowerPellet(coor[0], coor[1]))
                 elif num == 7:
                     self.pellets.append(Pellet(coor[0], coor[1]))
                 coor[0] += 20
@@ -89,7 +89,7 @@ class Mapa():
             
     def get_sprites(self):
         """ Devuelve las tuplas con los bordes y las pellets """
-        return tuple(self.bordes), tuple(self.pellets)
+        return  tuple(self.bordes), tuple(self.pellets), tuple(self.pow_pellets)
 
 class Ghost(pygame.sprite.Sprite):
     """ Clase que maneja un fantasma cualquiera """
@@ -425,23 +425,25 @@ class Juego():
         self.azul = (0, 0, 255)
         
         # Inicializaciones privadas
-        self.__font()
-        self.__display()
-        self.__logic()
+        self.__config()
         self.__mixer()
         
-        # Creamos algunos fantasmas y el pacman
-        self.pacman = Pacman(400, 300)
-        self.blinky = Blinky(300, 300)
-        self.pinky = Pinky(100, 100)
+        self.puntos = 0
         
         # Creamos un mapa
         mi_mapa = Mapa()
-        self.bordes, self.pellets = mi_mapa.get_sprites()
+        self.bordes, self.pellets, self.pow_pellets = mi_mapa.get_sprites()
+        
+        # Creamos algunos fantasmas y el pacman
+        self.pacman = Pacman(   self.pellets[20].rect[0] - 5, 
+                                self.pellets[20].rect[1] - 5)
+        self.blinky = Blinky(300, 300)
+        self.pinky = Pinky(100, 100)
         
         # Creamos grupos de sprites
         self.g_ghosts = pygame.sprite.Group((self.blinky, self.pinky))
         self.g_pellets = pygame.sprite.Group(self.pellets)
+        self.g_powpellets = pygame.sprite.Group(self.pow_pellets)
         self.g_pacman = pygame.sprite.GroupSingle((self.pacman))
         self.g_bordes = pygame.sprite.Group(self.bordes)
         # Creamos un reloj de juego
@@ -466,9 +468,15 @@ class Juego():
             self.__dib_menu()
         elif self.dondeestoy == 'juego':
             #self.__dib_juego()
+            
+            self.sur_puntos = self.fuente_20.render(str(self.puntos),
+                                                True,
+                                                self.blanco)
             # Dibujado 
             self.pantalla.blit(self.sur_negro, (0, 0))
+            self.pantalla.blit(self.sur_puntos, (520, 10))
             self.g_bordes.draw(self.pantalla)
+            self.g_powpellets.draw(self.pantalla)
             self.g_pellets.draw(self.pantalla)
             self.g_ghosts.draw(self.pantalla)
             self.g_pacman.draw(self.pantalla)
@@ -489,6 +497,25 @@ class Juego():
                                                         self.g_ghosts, 
                                                         False, 
                                                         pygame.sprite.collide_circle_ratio(0.7))
+            
+            pell_col = pygame.sprite.spritecollide(     self.pacman,
+                                                        self.g_pellets,
+                                                        True,
+                                                        pygame.sprite.collide_circle_ratio(0.3))
+                                                        
+            pow_col = pygame.sprite.spritecollide(      self.pacman,
+                                                        self.g_powpellets,
+                                                        True,
+                                                        pygame.sprite.collide_circle_ratio(0.5))
+                                                        
+            
+            if pell_col:
+                self.puntos += 10
+            
+            if pow_col:
+                for fantasma in self.g_ghosts:
+                    fantasma.debilitar()
+                self.puntos += 50
             
             for fantasma in fant_col:
                 if fantasma.estado == 'huyendo':
@@ -584,28 +611,8 @@ class Juego():
         time.sleep(2)
         self.dondeestoy = 'menu'
         
-    def __dib_juego(self):
-        """ Dibujamos cositas del juego """
-        #pygame.display.update()
-        
     def __dib_cred(self):
         """ Dibujamos los créditos """
-    
-    def __logic(self):
-        """ Método privado para cargar cosas de lógica del juego """
-        self.terminado = False
-
-        
-        # Definimos las posiciones de los menús
-        self.menupos = ((self.dim[0]/2 - self.sur_logo.get_width()/2, 30),
-                        (self.dim[0]/2 - self.sur_jugar.get_width()/2, 250),
-                        (self.dim[0]/2 - self.sur_creds.get_width()/2, 300),
-                        (self.dim[0]/2 - self.sur_salir.get_width()/2, 350))
-        
-        # Posición del cursor del menú
-        self.curpos = 1
-        # Estado de la aplicación
-        self.dondeestoy = 'menu'
     
     def __mixer(self):
         """ Método privado para cargar componentes de sonido """
@@ -614,13 +621,23 @@ class Juego():
         # Creamos una serie de canales
         self.snd_channel0 = pygame.mixer.Channel(0)
         self.snd_channel1 = pygame.mixer.Channel(1)
-    
-    def __display(self):
-        """ Método privado para cargar componentes de imagen """
+        
+    def __config(self):
+        """ Método privado para cargar componentes de fuente """
+        pygame.font.init()
+        
+        # Definimos un par de fuentes
+        self.fuente_20 = pygame.font.SysFont('Monospace', 20, bold = True)
+        self.fuente_60 = pygame.font.SysFont('Monospace', 60, bold = True)
+        
+        
+        self.sur_jugar = self.fuente_20.render('Jugar', True, self.rojo)
+        self.sur_creds = self.fuente_20.render(u'Créditos', True, self.azul)
+        self.sur_salir = self.fuente_20.render('Salir', True, self.verde)
         
         # Definimos dimensiones de la pantalla
-        self.disp_ancho = 800
-        self.disp_alto = 600
+        self.disp_ancho = 620
+        self.disp_alto = 520
         
         self.dim = (self.disp_ancho, self.disp_alto)
         
@@ -638,19 +655,20 @@ class Juego():
         self.sur_cursor = cargar_imagen('img/cursor.png', True)
         self.sur_logo = cargar_imagen('img/menupac.png', True)
         
+        self.terminado = False
+
         
-    def __font(self):
-        """ Método privado para cargar componentes de fuente """
-        pygame.font.init()
+        # Definimos las posiciones de los menús
+        self.menupos = ((self.dim[0]/2 - self.sur_logo.get_width()/2, 30),
+                        (self.dim[0]/2 - self.sur_jugar.get_width()/2, 250),
+                        (self.dim[0]/2 - self.sur_creds.get_width()/2, 300),
+                        (self.dim[0]/2 - self.sur_salir.get_width()/2, 350))
         
-        # Definimos un par de fuentes
-        self.fuente_20 = pygame.font.SysFont('Monospace', 20, bold = True)
-        self.fuente_60 = pygame.font.SysFont('Monospace', 60, bold = True)
+        # Posición del cursor del menú
+        self.curpos = 1
+        # Estado de la aplicación
+        self.dondeestoy = 'menu'
         
-        
-        self.sur_jugar = self.fuente_20.render('Jugar', True, self.rojo)
-        self.sur_creds = self.fuente_20.render(u'Créditos', True, self.azul)
-        self.sur_salir = self.fuente_20.render('Salir', True, self.verde)
         
 def main():
     """ Función principal, boilerplate """
