@@ -1,10 +1,19 @@
 #!/usr/bin/python
 #-*- coding: utf-8 -*-
 
-import pygame, time
+import pygame, time, sys, os
+
+SYSPATH = sys.path[0]
+
+
 
 def cargar_imagen(archivo, transparencia = False):
     """ Cargamos una imagen y cogemos el color key en 0, 0 """
+    
+    l_archivo = archivo.rsplit('/')
+    archivo = os.path.join(SYSPATH, l_archivo[0])
+    for cadena in l_archivo[1:]:
+        archivo = os.path.join(archivo, cadena)
     try:
         imagen = pygame.image.load(archivo)
     except pygame.error, message:
@@ -52,12 +61,13 @@ class Borde(pygame.sprite.Sprite):
             self.image = cargar_imagen('img/tiles/5.png', True)
         
         self.rect = self.image.get_rect()
-        self.rect = pygame.rect.Rect((x,y), self.rect.bottomright)
+        self.rect = pygame.rect.Rect((x, y), self.rect.bottomright)
 
 class Mapa():
     """ Esta clase lee un nivel de mapa y genera una matriz de bloques """
     def __init__(self, archivo = 'maps/map0.txt'):
         """ """
+        archivo = os.path.join(SYSPATH, 'maps', 'map0.txt')
         map_file = open(archivo, 'r')
         lineas = map_file.readlines()
         self.mapa = list()
@@ -74,22 +84,44 @@ class Mapa():
         
         coor = [0, 0]
         
+        self.glob_map = list()
+        temp_list = list()
+        
         # Recorremos la matriz y creamos una lista con objetos del juego
         for linea in self.mapa:
+            temp_list = list()
             for num in linea:
                 if num >= 0 and num <= 5:
                     self.bordes.append(Borde(coor[0], coor[1], num))
+                    temp_list.append((1, coor[0], coor[1]))
                 elif num == 6:
                     self.pow_pellets.append(PowerPellet(coor[0], coor[1]))
+                    temp_list.append((0, coor[0], coor[1]))
                 elif num == 7:
                     self.pellets.append(Pellet(coor[0], coor[1]))
+                    temp_list.append((0, coor[0], coor[1]))
                 coor[0] += 20
+            self.glob_map.append(temp_list)
             coor[1] += 20
             coor[0] = 0
             
     def get_sprites(self):
         """ Devuelve las tuplas con los bordes y las pellets """
         return  tuple(self.bordes), tuple(self.pellets), tuple(self.pow_pellets)
+    
+    def check_hit(self, coor, variante = (0,0)):
+        """ """
+        
+        coor[0] += variante[0]
+        coor[1] += variante[1]
+        
+        row = int(round(coor[1] / 20.0))
+        col = int(round(coor[0] / 20.0))
+        
+        if self.glob_map[row][col][0] == 1:
+            return True
+        else:
+            False
 
 class Ghost(pygame.sprite.Sprite):
     """ Clase que maneja un fantasma cualquiera """
@@ -103,6 +135,8 @@ class Ghost(pygame.sprite.Sprite):
         #self.estado = 'siguiendo'
         #self.estado = 'huyendo'
         #self.estado = 'volviendo'
+        
+        self.stop = False
         
         # Imágenes
         self._normal = list()
@@ -145,8 +179,9 @@ class Ghost(pygame.sprite.Sprite):
         self._normal = list()
         print 'To be re-written'
         
-    def stop(self):
+    def parar(self):
         """ Detiene al fantasma """
+        self.stop = True
         self.next_move = (0, 0)
     
     def left(self):
@@ -211,7 +246,8 @@ class Ghost(pygame.sprite.Sprite):
     
     def update(self):
         """ """
-        self.ia()
+        if self.stop == False:
+            self.ia()
         
         if self.estado == 'buscando' or self.estado == 'persiguiendo':        
             # Si no está parado
@@ -340,7 +376,29 @@ class Pacman(pygame.sprite.Sprite):
                             cargar_imagen('img/pd2.png', True)])
         self.imgs.append([zero, cargar_imagen('img/pu1.png', True),
                             cargar_imagen('img/pu2.png', True)])
-                            
+        
+        self.img_muerto = list()
+        
+        # Imágenes del muerto
+        self.img_muerto.append(self.imgs[3][1])
+        self.img_muerto.append(self.imgs[3][2])
+        self.img_muerto.append(cargar_imagen('img/dead0.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead1.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead2.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead3.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead4.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead5.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead6.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead7.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead8.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead9.png', True))
+        self.img_muerto.append(cargar_imagen('img/dead10.png', True))
+        
+        print self.img_muerto
+        
+        self.muerto = False
+        self.idx_muerto = 0
+        
         # Imagen del Sprite
         self.image = self.imgs[self.orient][self.estado]
         
@@ -355,17 +413,34 @@ class Pacman(pygame.sprite.Sprite):
         
     def update(self):
         """ Código de actualización del sprite """
-        
-        if self.next_move != (0, 0):
-            if self.estado == 2:
-                self.estado = 0
-            else:
-                self.estado += 1
-            
-            self.image = self.imgs[self.orient][self.estado]
-            
-            self.rect = self.rect.move(self.next_move)
-        
+
+        if self.muerto == True:
+            self.image = self.img_muerto[self.idx_muerto]
+            if self.idx_muerto < 12:
+                self.idx_muerto += 1
+        else:
+            if self.next_move != (0, 0):
+                
+                siguiente = self.rect.move(self.next_move)
+                
+                if self.next_move[0] > 0 or self.next_move[1] > 0:
+                    test = global_map.check_hit(siguiente.move(self.next_move),
+                                                (5,5))
+                else:
+                    test = global_map.check_hit(siguiente.move(self.next_move))
+                
+                if test != True:
+                    if self.estado == 2:
+                        self.estado = 0
+                    else:
+                        self.estado += 1
+                    
+                    self.image = self.imgs[self.orient][self.estado]
+                    
+                    self.rect = self.rect.move(self.next_move)
+                elif test == True:
+                    self.stop()
+                    
     def stop(self):
         """ Paramos el pacman """
         self.next_move = (0, 0)
@@ -411,7 +486,8 @@ class Pacman(pygame.sprite.Sprite):
             
     def matar(self):
         """ Nos matan :sadface: """
-        print 'NOoooooooooooooooooooooooo'
+        self.muerto = True
+        self.next_move = (0,0)
 
 class Juego():
     """ Esta clase inicia todas las cosas de pygame """
@@ -431,8 +507,8 @@ class Juego():
         self.puntos = 0
         
         # Creamos un mapa
-        mi_mapa = Mapa()
-        self.bordes, self.pellets, self.pow_pellets = mi_mapa.get_sprites()
+        self.mapa = Mapa()
+        self.bordes, self.pellets, self.pow_pellets = self.mapa.get_sprites()
         
         # Creamos algunos fantasmas y el pacman
         self.pacman = Pacman(   self.pellets[20].rect[0] - 5, 
@@ -493,6 +569,7 @@ class Juego():
             # Actualizamos
             self.g_ghosts.update()
             self.g_pacman.update()
+            
             fant_col = pygame.sprite.spritecollide(   self.pacman, 
                                                         self.g_ghosts, 
                                                         False, 
@@ -522,6 +599,8 @@ class Juego():
                     fantasma.comer()
                 
                 if fantasma.estado == 'buscando' or fantasma.estado == 'persiguiendo':
+                    for fantasma in self.g_ghosts:
+                        fantasma.parar()
                     self.pacman.matar()
 
     def eventos(self):
@@ -601,16 +680,7 @@ class Juego():
         self.pantalla.blit(self.sur_cursor, 
                             (   self.menupos[self.curpos][0] - 35,
                                 self.menupos[self.curpos][1]))
-
-        
-    def __dib_intro(self):
-        """ Dibujamos la intro """
-        self.sur_intro = cargar_imagen('./img/intro.png')
-        self.pantalla.blit(self.sur_intro, (0, 0))
-        pygame.display.flip()
-        time.sleep(2)
-        self.dondeestoy = 'menu'
-        
+                            
     def __dib_cred(self):
         """ Dibujamos los créditos """
     
@@ -657,7 +727,6 @@ class Juego():
         
         self.terminado = False
 
-        
         # Definimos las posiciones de los menús
         self.menupos = ((self.dim[0]/2 - self.sur_logo.get_width()/2, 30),
                         (self.dim[0]/2 - self.sur_jugar.get_width()/2, 250),
@@ -669,11 +738,9 @@ class Juego():
         # Estado de la aplicación
         self.dondeestoy = 'menu'
         
-        
-def main():
-    """ Función principal, boilerplate """
-    mi_juego = Juego()
-    mi_juego.bucle()
 
-if __name__ == '__main__':
-    main()
+juego = Juego()
+global_map = Mapa()
+juego.bucle()
+main()
+print 'ERRORE'
